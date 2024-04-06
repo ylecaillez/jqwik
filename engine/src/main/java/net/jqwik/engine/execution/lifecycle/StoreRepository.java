@@ -1,6 +1,7 @@
 package net.jqwik.engine.execution.lifecycle;
 
 import java.util.*;
+import java.util.concurrent.locks.*;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -14,15 +15,22 @@ import net.jqwik.api.lifecycle.*;
  */
 public class StoreRepository {
 
+	private static final Lock lock = new ReentrantLock();
 	private static StoreRepository current;
+
 
 	// I hate this singleton as much as any singleton.
 	// It seems to be necessary for the Store API though :-(
-	public synchronized static StoreRepository getCurrent() {
-		if (current == null) {
-			current = new StoreRepository();
+	public static StoreRepository getCurrent() {
+		lock.lock();
+		try {
+			if (current == null) {
+				current = new StoreRepository();
+			}
+			return current;
+		} finally {
+			lock.unlock();
 		}
-		return current;
 	}
 
 	private static class IdentifiedStores extends LinkedHashMap<TestDescriptor, ScopedStore<?>> {}

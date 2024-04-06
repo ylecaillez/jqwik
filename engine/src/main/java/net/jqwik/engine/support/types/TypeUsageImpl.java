@@ -4,6 +4,7 @@ import java.lang.annotation.*;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.*;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -302,6 +303,7 @@ public class TypeUsageImpl implements TypeUsage, Cloneable {
 		return toTypeUsages(wildcardType.getLowerBounds());
 	}
 
+	private final Lock lock = new ReentrantLock();
 	private final Class<?> rawType;
 	private final Type type;
 	private final AnnotatedType annotatedType;
@@ -667,10 +669,13 @@ public class TypeUsageImpl implements TypeUsage, Cloneable {
 		}
 		// Double checked locking for thread safety
 		if (superclass == null) {
-			synchronized (this) {
+			lock.lock();
+			try {
 				if (superclass == null) {
 					superclass = createSuperclass();
 				}
+			} finally {
+				lock.unlock();
 			}
 		}
 		return Optional.of(superclass);
@@ -727,10 +732,13 @@ public class TypeUsageImpl implements TypeUsage, Cloneable {
 	public List<TypeUsage> getInterfaces() {
 		// Double checked locking for thread safety
 		if (interfaces == null) {
-			synchronized(this) {
+			lock.lock();
+			try {
 				if (interfaces == null) {
 					interfaces = createInterfaces();
 				}
+			} finally {
+				lock.unlock();
 			}
 		}
 		return interfaces;

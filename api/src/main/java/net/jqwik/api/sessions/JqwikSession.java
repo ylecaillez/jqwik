@@ -7,6 +7,8 @@ import net.jqwik.api.lifecycle.*;
 
 import static org.apiguardian.api.API.Status.*;
 
+import java.util.concurrent.locks.*;
+
 /**
  * JqwikSession is the abstraction to give users of {@linkplain Arbitrary#sample()}
  * and {@linkplain Arbitrary#sampleStream()} outside the jqwik lifecycle
@@ -16,6 +18,7 @@ import static org.apiguardian.api.API.Status.*;
  */
 @API(status = MAINTAINED, since = "1.8.0")
 public class JqwikSession {
+	private static final Lock lock = new ReentrantLock();
 
 	@FunctionalInterface
 	public interface Runnable {
@@ -41,24 +44,44 @@ public class JqwikSession {
 		public abstract void runInSession(Runnable runnable);
 	}
 
-	public synchronized static void start() {
-		JqwikSessionFacade.implementation.startSession();
+	public static void start() {
+		lock.lock();
+		try {
+			JqwikSessionFacade.implementation.startSession();
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	public static boolean isActive() {
 		return JqwikSessionFacade.implementation.isSessionOpen();
 	}
 
-	public synchronized static void finish() {
-		JqwikSessionFacade.implementation.finishSession();
+	public static void finish() {
+		lock.lock();
+		try {
+			JqwikSessionFacade.implementation.finishSession();
+		} finally {
+			lock.unlock();
+		}
 	}
 
-	public synchronized static void finishTry() {
-		JqwikSessionFacade.implementation.finishTry();
+	public static void finishTry() {
+		lock.lock();
+		try {
+			JqwikSessionFacade.implementation.finishTry();
+		} finally {
+			lock.unlock();
+		}
 	}
 
-	public synchronized static void run(Runnable runnable) {
-		JqwikSessionFacade.implementation.runInSession(runnable);
+	public static void run(Runnable runnable) {
+		lock.lock();
+		try {
+			JqwikSessionFacade.implementation.runInSession(runnable);
+		} finally {
+			lock.unlock();
+		}
 	}
 
 

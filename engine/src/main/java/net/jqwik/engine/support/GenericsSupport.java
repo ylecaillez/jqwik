@@ -2,12 +2,14 @@ package net.jqwik.engine.support;
 
 import java.lang.reflect.*;
 import java.util.*;
+import java.util.concurrent.locks.*;
 
 import net.jqwik.api.providers.*;
 
 public class GenericsSupport {
 
 	private static final Map<TypeUsage, GenericsClassContext> contextsCache = new LinkedHashMap<>();
+	private static final Lock lock = new ReentrantLock();
 
 	/**
 	 * Return a context object which can resolve generic types for a given {@code contextClass}.
@@ -17,15 +19,25 @@ public class GenericsSupport {
 	 * @param contextClass The class to wrap in a context
 	 * @return a potentially cached context object
 	 */
-	public synchronized static GenericsClassContext contextFor(Class<?> contextClass) {
-		if (contextClass == null) {
-			return GenericsClassContext.NULL;
+	public static GenericsClassContext contextFor(Class<?> contextClass) {
+		lock.lock();
+		try {
+			if (contextClass == null) {
+				return GenericsClassContext.NULL;
+			}
+			return contextFor(TypeUsage.of(contextClass));
+		} finally {
+			lock.unlock();
 		}
-		return contextFor(TypeUsage.of(contextClass));
 	}
 
-	public synchronized static GenericsClassContext contextFor(TypeUsage typeUsage) {
-		return contextsCache.computeIfAbsent(typeUsage, GenericsSupport::createContext);
+	public static GenericsClassContext contextFor(TypeUsage typeUsage) {
+		lock.lock();
+		try {
+			return contextsCache.computeIfAbsent(typeUsage, GenericsSupport::createContext);
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	private static GenericsClassContext createContext(TypeUsage typeUsage) {

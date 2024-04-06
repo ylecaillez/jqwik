@@ -2,6 +2,7 @@ package net.jqwik.engine.properties.state;
 
 import java.util.*;
 import java.util.concurrent.atomic.*;
+import java.util.concurrent.locks.*;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -132,6 +133,7 @@ public class ShrinkableChain<T> implements Shrinkable<Chain<T>> {
 	private class ChainIterator implements Iterator<T> {
 
 		private final Random random = SourceOfRandomness.newRandom(randomSeed);
+		private final Lock lock = new ReentrantLock();
 		private int steps = 0;
 		private T current;
 		private boolean initialSupplied = false;
@@ -146,7 +148,8 @@ public class ShrinkableChain<T> implements Shrinkable<Chain<T>> {
 			if (!initialSupplied) {
 				return true;
 			}
-			synchronized (ShrinkableChain.this) {
+			lock.lock();
+			try {
 				if (isInfinite()) {
 					nextTransformer = nextTransformer();
 					return !nextTransformer.isEndOfChain();
@@ -158,6 +161,8 @@ public class ShrinkableChain<T> implements Shrinkable<Chain<T>> {
 						return false;
 					}
 				}
+			} finally {
+				lock.unlock();
 			}
 		}
 
@@ -168,10 +173,13 @@ public class ShrinkableChain<T> implements Shrinkable<Chain<T>> {
 				return current;
 			}
 
-			synchronized (ShrinkableChain.this) {
+			lock.lock();
+			try {
 				Transformer<T> transformer = nextTransformer;
 				current = transformState(transformer, current);
 				return current;
+			} finally {
+				lock.unlock();
 			}
 		}
 

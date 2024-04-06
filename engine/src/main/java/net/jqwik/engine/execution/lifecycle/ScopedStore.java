@@ -1,5 +1,6 @@
 package net.jqwik.engine.execution.lifecycle;
 
+import java.util.concurrent.locks.*;
 import java.util.function.*;
 import java.util.logging.*;
 
@@ -18,6 +19,7 @@ public class ScopedStore<T> implements Store<T> {
 	private final Lifespan lifespan;
 	private final TestDescriptor scope;
 	private final Supplier<T> initialValueSupplier;
+	private final Lock lock = new ReentrantLock();
 
 	private T value;
 	private boolean initialized = false;
@@ -35,12 +37,17 @@ public class ScopedStore<T> implements Store<T> {
 	}
 
 	@Override
-	public synchronized T get() {
-		if (!initialized) {
-			value = initialValueSupplier.get();
-			initialized = true;
+	public T get() {
+		lock.lock();
+		try {
+			if (!initialized) {
+				value = initialValueSupplier.get();
+				initialized = true;
+			}
+			return value;
+		} finally {
+			lock.unlock();
 		}
-		return value;
 	}
 
 	@Override
@@ -49,17 +56,27 @@ public class ScopedStore<T> implements Store<T> {
 	}
 
 	@Override
-	public synchronized void update(Function<T, T> updater) {
-		value = updater.apply(get());
+	public void update(Function<T, T> updater) {
+		lock.lock();
+		try {
+			value = updater.apply(get());
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	@Override
-	public synchronized void reset() {
-		close();
-		initialized = false;
+	public void reset() {
+		lock.lock();
+		try {
+			close();
+			initialized = false;
 
-		// Free memory as soon as possible, the store object might go live on for a while:
-		value = null;
+			// Free memory as soon as possible, the store object might go live on for a while:
+			value = null;
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	public Object getIdentifier() {

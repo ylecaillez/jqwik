@@ -1,6 +1,7 @@
 package net.jqwik.engine.properties.state;
 
 import java.util.*;
+import java.util.concurrent.locks.*;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -19,6 +20,7 @@ public class SequentialActionChain<T> implements ActionChain<T> {
 	private volatile RunningState currentRunning = RunningState.NOT_RUN;
 	private final List<Consumer<T>> peekers = new ArrayList<>();
 	private final List<Tuple.Tuple2<String, Consumer<T>>> invariants = new ArrayList<>();
+	private final Lock lock = new ReentrantLock();
 
 	public SequentialActionChain(Chain<T> chain) {
 		this.chain = chain;
@@ -37,13 +39,18 @@ public class SequentialActionChain<T> implements ActionChain<T> {
 
 	@Override
 	@NonNull
-	public synchronized T run() {
-		currentRunning = RunningState.RUNNING;
-		for (Iterator<T> iterator = chain.iterator(); iterator.hasNext(); ) {
-			nextAction(iterator);
+	public T run() {
+		lock.lock();
+		try {
+			currentRunning = RunningState.RUNNING;
+			for (Iterator<T> iterator = chain.iterator(); iterator.hasNext(); ) {
+				nextAction(iterator);
+			}
+			currentRunning = RunningState.SUCCEEDED;
+			return currentValue;
+		} finally {
+			lock.unlock();
 		}
-		currentRunning = RunningState.SUCCEEDED;
-		return currentValue;
 	}
 
 	private void nextAction(Iterator<T> iterator) {
@@ -107,8 +114,13 @@ public class SequentialActionChain<T> implements ActionChain<T> {
 
 	@Override
 	@NonNull
-	public synchronized Optional<T> finalState() {
-		return Optional.ofNullable(currentValue);
+	public Optional<T> finalState() {
+		lock.lock();
+		try {
+			return Optional.ofNullable(currentValue);
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	@Override
@@ -119,9 +131,14 @@ public class SequentialActionChain<T> implements ActionChain<T> {
 
 	@Override
 	@NonNull
-	public synchronized ActionChain<T> peek(@NonNull Consumer<T> peeker) {
-		peekers.add(peeker);
-		return this;
+	public ActionChain<T> peek(@NonNull Consumer<T> peeker) {
+		lock.lock();
+		try {
+			peekers.add(peeker);
+			return this;
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	@Override

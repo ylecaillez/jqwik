@@ -1,6 +1,7 @@
 package net.jqwik.engine.properties.stateful;
 
 import java.util.*;
+import java.util.concurrent.locks.*;
 import java.util.function.*;
 import java.util.stream.*;
 
@@ -18,6 +19,7 @@ class SequentialActionSequence<M> implements ActionSequence<M> {
 	protected final List<Action<M>> sequence = new ArrayList<>();
 	private final List<Tuple2<String, Invariant<M>>> invariants = new ArrayList<>();
 	private final List<Consumer<M>> peekers = new ArrayList<>();
+	private final Lock lock = new ReentrantLock();
 
 	protected RunState runState = RunState.NOT_RUN;
 	private M currentModel = null;
@@ -31,23 +33,33 @@ class SequentialActionSequence<M> implements ActionSequence<M> {
 	}
 
 	@Override
-	public synchronized List<Action<M>> runActions() {
-		return sequence;
+	public List<Action<M>> runActions() {
+		lock.lock();
+		try {
+			return sequence;
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	@Override
-	public synchronized M run(M model) {
-		currentModel = model;
-		if (runState == RunState.NOT_RUN) {
-			initialRun();
-		} else {
-			repeatedRun();
+	public M run(M model) {
+		lock.lock();
+		try {
+			currentModel = model;
+			if (runState == RunState.NOT_RUN) {
+				initialRun();
+			} else {
+				repeatedRun();
+			}
+			if (sequence.isEmpty()) {
+				throw new JqwikException("Sequences without actions are invalid");
+			}
+			runState = RunState.SUCCEEDED;
+			return currentModel;
+		} finally {
+			lock.unlock();
 		}
-		if (sequence.isEmpty()) {
-			throw new JqwikException("Sequences without actions are invalid");
-		}
-		runState = RunState.SUCCEEDED;
-		return currentModel;
 	}
 
 	private void initialRun() {
@@ -125,13 +137,18 @@ class SequentialActionSequence<M> implements ActionSequence<M> {
 	}
 
 	@Override
-	public synchronized ActionSequence<M> withInvariant(String label, Invariant<M> invariant) {
-		invariants.add(Tuple.of(label, invariant));
-		return this;
+	public ActionSequence<M> withInvariant(String label, Invariant<M> invariant) {
+		lock.lock();
+		try {
+			invariants.add(Tuple.of(label, invariant));
+			return this;
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	@Override
-	public synchronized ActionSequence<M> peek(Consumer<M> modelPeeker) {
+	public ActionSequence<M> peek(Consumer<M> modelPeeker) {
 		peekers.add(modelPeeker);
 		return this;
 	}
@@ -151,8 +168,13 @@ class SequentialActionSequence<M> implements ActionSequence<M> {
 	}
 
 	@Override
-	public synchronized M finalModel() {
-		return currentModel;
+	public M finalModel() {
+		lock.lock();
+		try {
+			return currentModel;
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	@Override
